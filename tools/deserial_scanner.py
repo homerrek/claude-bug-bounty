@@ -139,7 +139,7 @@ def analyze_value(source: str, key: str, value: str):
 
     if detect_java(value):
         findings.append(("Java serialized object", "CRITICAL",
-                          "Java \xac\xed magic bytes detected — potential ysoserial target"))
+                          "Java 0xACED magic bytes (rO0A base64) detected — potential ysoserial target"))
     if detect_php(value):
         findings.append(("PHP serialized object", "HIGH",
                           f"PHP serialize() pattern in {source}:{key}"))

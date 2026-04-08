@@ -232,8 +232,7 @@ def main():
     print(f"\n{BOLD}JWT Header:{RESET}  {json.dumps(header)}")
     print(f"{BOLD}JWT Payload:{RESET} {json.dumps(payload)}")
     if "exp" in payload:
-        import time as _t
-        remaining = payload["exp"] - _t.time()
+        remaining = payload["exp"] - time.time()
         state = f"{GREEN}valid{RESET}" if remaining > 0 else f"{RED}EXPIRED{RESET}"
         print(f"{BOLD}Expiry:{RESET}      {state} ({int(abs(remaining))}s {'remaining' if remaining > 0 else 'ago'})")
 

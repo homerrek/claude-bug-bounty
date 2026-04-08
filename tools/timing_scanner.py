@@ -231,10 +231,11 @@ def test_password_timing(url: str, param: str, samples: int,
     print(f"  {DIM}Compare timing for existing vs non-existing user with same password{RESET}")
 
     test_cases = [
-        ("valid-ish-user",   "admin",                 "WrongPassword!1"),
-        ("invalid-user",     "nonexistent_xyz_8675309", "WrongPassword!1"),
-        ("valid-ish-short",  "admin",                 "a"),
-        ("invalid-short",    "nonexistent_xyz_8675309", "a"),
+        # 'admin' is a common username assumed to exist — timing diff vs truly invalid user
+        ("common-username",       "admin",                   "WrongPassword!1"),
+        ("invalid-user",          "nonexistent_xyz_8675309", "WrongPassword!1"),
+        ("common-username-short", "admin",                   "a"),
+        ("invalid-short",         "nonexistent_xyz_8675309", "a"),
     ]
 
     if dry_run:
@@ -254,8 +255,8 @@ def test_password_timing(url: str, param: str, samples: int,
         print(f"  {DIM}{name:30s} mean={mean(times):.1f}ms{RESET}")
 
     # Compare valid-ish vs invalid
-    valid_mean   = mean(results.get("valid-ish-user", [0]))
-    invalid_mean = mean(results.get("invalid-user",   [0]))
+    valid_mean   = mean(results.get("common-username", [0]))
+    invalid_mean = mean(results.get("invalid-user",    [0]))
     diff = abs(valid_mean - invalid_mean)
 
     if diff > 50:  # >50ms difference is suspicious

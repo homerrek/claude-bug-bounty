@@ -175,7 +175,7 @@ def test_case_variation(url: str, method: str, body: dict | None,
     # Add trailing slash / double slash
     variations += [
         ("trailing-slash",   url.rstrip("/") + "/"),
-        ("double-slash",     url.replace("://", "://").replace(parsed.path, "/" + parsed.path.lstrip("/"))),
+        ("double-slash",     urllib.parse.urlunparse(parsed._replace(path="/" + parsed.path.lstrip("/")))),
     ]
 
     for name, var_url in variations:

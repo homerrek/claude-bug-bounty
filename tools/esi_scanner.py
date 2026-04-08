@@ -182,7 +182,7 @@ def check_esi_response(body: str, original_payload: str) -> list[str]:
     if "<esi:" not in body and "<esi:" in original_payload:
         signals.append("ESI tag was stripped/processed (not reflected as-is)")
     # If attacker domain appeared in response (SSRF reflection)
-    if "attacker.example.com" in body:
+    if re.search(r'(?<![.\w])attacker\.example\.com(?![.\w])', body):
         signals.append("Attacker domain reflected — possible ESI SSRF")
     # Internal metadata markers
     for marker in ("ami-", "instance-id", "computeMetadata", "user-data", "iam/"):
