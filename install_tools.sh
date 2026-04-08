@@ -8,9 +8,11 @@
 set -euo pipefail
 
 INSTALL_CICD_SCANNER=false
+INSTALL_KALI_TOOLS=false
 for arg in "$@"; do
     case "$arg" in
         --with-cicd-scanner) INSTALL_CICD_SCANNER=true ;;
+        --with-kali-tools) INSTALL_KALI_TOOLS=true ;;
     esac
 done
 
@@ -159,6 +161,52 @@ if [ "$INSTALL_CICD_SCANNER" = true ]; then
     fi
 else
     log_warn "cicd_scanner skipped (use --with-cicd-scanner to install)"
+fi
+
+# Kali tool integration scripts (optional: --with-kali-tools)
+if [ "$INSTALL_KALI_TOOLS" = true ]; then
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    KALI_INTEGRATION_SRC="$SCRIPT_DIR/tools/kali_integration.py"
+    KALI_DETECTOR_SRC="$SCRIPT_DIR/tools/kali_tool_detector.py"
+
+    if [ -f "$KALI_INTEGRATION_SRC" ] && [ -f "$KALI_DETECTOR_SRC" ]; then
+        INSTALL_DIR="/usr/local/bin"
+
+        # Install kali_integration
+        if cp "$KALI_INTEGRATION_SRC" "$INSTALL_DIR/kali_integration" 2>/dev/null || \
+           sudo cp "$KALI_INTEGRATION_SRC" "$INSTALL_DIR/kali_integration"; then
+            chmod +x "$INSTALL_DIR/kali_integration" 2>/dev/null || sudo chmod +x "$INSTALL_DIR/kali_integration"
+            log_ok "kali_integration installed to $INSTALL_DIR/kali_integration"
+        else
+            mkdir -p "$HOME/bin"
+            cp "$KALI_INTEGRATION_SRC" "$HOME/bin/kali_integration"
+            chmod +x "$HOME/bin/kali_integration"
+            log_ok "kali_integration installed to ~/bin/kali_integration"
+        fi
+
+        # Install kali_tool_detector
+        if cp "$KALI_DETECTOR_SRC" "$INSTALL_DIR/kali_detector" 2>/dev/null || \
+           sudo cp "$KALI_DETECTOR_SRC" "$INSTALL_DIR/kali_detector"; then
+            chmod +x "$INSTALL_DIR/kali_detector" 2>/dev/null || sudo chmod +x "$INSTALL_DIR/kali_detector"
+            log_ok "kali_detector installed to $INSTALL_DIR/kali_detector"
+        else
+            mkdir -p "$HOME/bin"
+            cp "$KALI_DETECTOR_SRC" "$HOME/bin/kali_detector"
+            chmod +x "$HOME/bin/kali_detector"
+            log_ok "kali_detector installed to ~/bin/kali_detector"
+        fi
+
+        # Run detection to show status
+        echo ""
+        echo "[*] Detecting Kali tools..."
+        if command -v kali_detector &>/dev/null; then
+            kali_detector || true
+        elif [ -x "$HOME/bin/kali_detector" ]; then
+            "$HOME/bin/kali_detector" || true
+        fi
+    fi
+else
+    log_warn "Kali tool integration skipped (use --with-kali-tools to install)"
 fi
 
 # Update nuclei templates
