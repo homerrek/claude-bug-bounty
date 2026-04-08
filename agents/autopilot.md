@@ -244,7 +244,14 @@ if has_caching_headers(url):
     if has_esi_header(url):
         run_esi_scanner(url)            # pre-check: Varnish/Squid/nginx
 
-# 14. Complex business logic — use fuzzer after other scanners pass
+# 15. Platform-specific scanners
+if "zendesk" in target_domain or has_zendesk_header():
+    run_zendesk_idor_test()             # pre-check: Zendesk platform
+
+if "hackerone.com" in target_domain:
+    run_hai_probe()                     # pre-check: HackerOne target
+
+# 16. Complex business logic — use fuzzer after other scanners pass
 if is_complex_business_logic(url) and not memory.already_fuzzed(url):
     run_zero_day_fuzzer(url)            # pre-check: complex multi-param logic
 
