@@ -300,7 +300,7 @@ def dedup_directory(directory):
 
     def _jaccard(set_a, set_b):
         if not set_a and not set_b:
-            return 1.0
+            return 0.0  # two empty files have undefined similarity; treat as 0
         union = len(set_a | set_b)
         return len(set_a & set_b) / union if union > 0 else 0.0
 

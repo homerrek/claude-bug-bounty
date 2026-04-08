@@ -42,6 +42,7 @@ REDIRECT_PARAMS = [
 
 EVIL_DOMAIN  = "evil-redirect-test.com"
 EVIL_URL     = f"https://{EVIL_DOMAIN}"
+SAFE_URL     = "https://safe.example.com"
 
 # (payload_template, label)
 # Use {evil} as placeholder; will be substituted with EVIL_URL / EVIL_DOMAIN
@@ -257,7 +258,7 @@ def test_param_pollution(url: str, rate: float, dry_run: bool):
         parsed = urllib.parse.urlparse(url)
         # Duplicate param: evil first, safe second — tests first-value-wins
         qs = urllib.parse.urlencode(
-            [(param, EVIL_URL), (param, "https://safe.example.com")]
+            [(param, EVIL_URL), (param, SAFE_URL)]
         )
         test_url = urllib.parse.urlunparse(parsed._replace(query=qs))
         if dry_run:
@@ -272,7 +273,7 @@ def test_param_pollution(url: str, rate: float, dry_run: bool):
 
         # Reversed order: safe first, evil second — tests last-value-wins
         qs_rev = urllib.parse.urlencode(
-            [(param, "https://safe.example.com"), (param, EVIL_URL)]
+            [(param, SAFE_URL), (param, EVIL_URL)]
         )
         test_url_rev = urllib.parse.urlunparse(parsed._replace(query=qs_rev))
         time.sleep(1.0 / rate)
