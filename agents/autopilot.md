@@ -116,10 +116,45 @@ For each P1 target endpoint:
 
 1. Check hunt memory — "Have I tested this before?"
 2. Select vuln class based on tech stack + URL pattern + memory
-3. Test with appropriate technique
+3. Test with appropriate technique using available scanners:
+   - **XSS**: tools/xss_scanner.py (50+ payloads, context-aware)
+   - **SQLi**: tools/sqli_scanner.py (error/blind/time-based)
+   - **IDOR**: tools/h1_idor_scanner.py
+   - **GraphQL**: tools/graphql_deep_scanner.py
+   - **JWT**: tools/jwt_scanner.py
+   - **SSRF**: nuclei + custom payloads
+   - **Exotic**: All 14 exotic scanners (dependency_confusion, dns_rebinding, etc.)
+   - **Kali Tools**: tools/kali_integration.py (40+ tools)
 4. Log every request to audit.jsonl
 5. If signal found → check chain table (A→B)
 6. If 5 minutes with no progress → rotate to next endpoint
+
+### Scanner Selection Logic
+```python
+# Choose scanner based on URL pattern and tech stack
+if "?" in url and "=" in url:
+    # Parameterized URL - test injection vulnerabilities
+    run_xss_scanner(url)
+    run_sqli_scanner(url)
+elif "/api/" in url or "/graphql" in url:
+    # API endpoint - test API-specific vulnerabilities
+    run_graphql_scanner(url)
+    run_idor_scanner(url)
+    run_jwt_scanner(url)
+elif url.endswith(".js") or "/static/" in url:
+    # JavaScript - check for secrets, dependencies
+    run_dependency_scanner(url)
+else:
+    # Generic endpoint - run full suite
+    run_exotic_scanners(url)
+```
+
+### Token Optimization
+Use `tools/context_manager.py` and `tools/token_optimizer.py` to:
+- Prioritize findings by severity (CRITICAL → HIGH → MEDIUM)
+- Summarize low-value findings into one-liners
+- Chunk large scan results into manageable pieces
+- Keep only last 3 scan results in active context
 
 ## Step 5: Validate
 
