@@ -7,7 +7,7 @@
 #   chmod +x h1_run.sh
 #   ./h1_run.sh
 
-set -e
+set -euo pipefail
 
 # ─── SET THESE BEFORE RUNNING ────────────────────────────────────────────────
 TOKEN_A=""          # Account A Bearer token (resource owner — your main account)

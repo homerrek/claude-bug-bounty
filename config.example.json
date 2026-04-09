@@ -7,5 +7,21 @@
   "nuclei_severity": ["critical", "high", "medium"],
   "katana_depth": 3,
   "ffuf_threads": 40,
-  "interactsh_server": "oast.pro"
+  "interactsh_server": "oast.pro",
+
+  "burp_proxy_host": "127.0.0.1",
+  "burp_proxy_port": 8080,
+
+  "anthropic_api_key": "YOUR_ANTHROPIC_API_KEY",
+  "openai_api_key": "YOUR_OPENAI_API_KEY",
+  "grok_api_key": "YOUR_GROK_API_KEY",
+
+  "nvd_api_key": "YOUR_NVD_API_KEY",
+
+  "bbh_output_dir": "~/bug-bounty-outputs",
+
+  "rate_limit_rps": 2,
+  "request_timeout_seconds": 15,
+
+  "_comment": "Copy to .env or export as environment variables. Never commit real credentials."
 }

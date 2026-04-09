@@ -47,7 +47,9 @@ def ws_upgrade_key() -> str:
 
 def compute_accept(key: str) -> str:
     combined = (key + WS_GUID).encode()
-    return base64.b64encode(hashlib.sha1(combined).digest()).decode()
+    # SHA-1 is mandated by the WebSocket protocol spec (RFC 6455 §4.2.2).
+    # This is not used for security; usedforsecurity=False suppresses the warning.
+    return base64.b64encode(hashlib.sha1(combined, usedforsecurity=False).digest()).decode()  # nosec B324
 
 
 def ws_to_http_url(ws_url: str) -> str:

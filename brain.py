@@ -1667,11 +1667,16 @@ NEXT ACTION: <one concrete action>
         """
         Execute a shell command and return (returncode, stdout, stderr).
         Stdout/stderr are capped at 8K each to avoid flooding context.
+
+        Security note: shell=True is required here because the LLM agent
+        constructs arbitrary shell pipelines (e.g., tool1 | tool2 | grep ...).
+        The caller (Brain/agent) is responsible for ensuring only safe,
+        operator-approved commands are passed to this method.
         """
         import subprocess as _sp
         proc = None
         try:
-            proc = _sp.Popen(
+            proc = _sp.Popen(  # nosec B602 – shell=True required for LLM agent pipelines
                 cmd, shell=True, stdout=_sp.PIPE, stderr=_sp.PIPE, text=True,
                 cwd=cwd, start_new_session=True,
                 env={**os.environ, "PATH": f"{os.path.expanduser('~/go/bin')}:{os.environ.get('PATH', '')}"},

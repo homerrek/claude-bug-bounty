@@ -18,14 +18,14 @@ import urllib.parse
 import urllib.error
 from datetime import datetime
 
-# macOS: Python may not have system SSL certs. Use unverified context for API queries.
+# Prefer certifi CA bundle when available; fall back to the system default
+# SSL context (which already trusts OS-level CAs). Never disable verification.
 _SSL_CTX = ssl.create_default_context()
 try:
     import certifi
     _SSL_CTX = ssl.create_default_context(cafile=certifi.where())
 except ImportError:
-    _SSL_CTX.check_hostname = False
-    _SSL_CTX.verify_mode = ssl.CERT_NONE
+    pass  # ssl.create_default_context() already loads system CA store
 
 # ─── Color codes ──────────────────────────────────────────────────────────────
 RED    = "\033[91m"
@@ -105,18 +105,30 @@ TECH_H1_KEYWORDS = {
 
 
 def fetch_url(url: str, headers: dict = None, data: bytes = None, timeout: int = 10) -> dict | None:
-    """Simple HTTP fetch, returns parsed JSON or None on error."""
+    """Simple HTTP fetch with 429 backoff; returns parsed JSON or None on error."""
+    import time as _time
     req = urllib.request.Request(url, data=data, headers=headers or {})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CTX) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-            return json.loads(body)
-    except urllib.error.HTTPError as e:
-        print(f"  {YELLOW}HTTP {e.code} for {url}{RESET}")
-        return None
-    except Exception as e:
-        print(f"  {YELLOW}Error fetching {url}: {e}{RESET}")
-        return None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CTX) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+                return json.loads(body)
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                try:
+                    retry_after = int(e.headers.get("Retry-After", 5) or 5)
+                except (ValueError, TypeError):
+                    retry_after = 5
+                wait = min(retry_after, 30) * (attempt + 1)
+                print(f"  {YELLOW}Rate limited ({url}). Waiting {wait}s…{RESET}")
+                _time.sleep(wait)
+                continue
+            print(f"  {YELLOW}HTTP {e.code} for {url}{RESET}")
+            return None
+        except Exception as e:
+            print(f"  {YELLOW}Error fetching {url}: {e}{RESET}")
+            return None
+    return None
 
 
 def fetch_github_advisories(tech: str) -> list[dict]:

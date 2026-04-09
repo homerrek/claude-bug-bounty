@@ -16,6 +16,7 @@ import re
 import shlex
 import subprocess
 import sys
+import urllib.parse as _urlparse
 from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,8 +24,29 @@ FINDINGS_DIR = os.path.join(BASE_DIR, "findings")
 
 
 def run_cmd(cmd, timeout=30):
+    """Run a command list and return (success, stdout).
+
+    Accepts a list (preferred) or a string (converted via shlex.split).
+    For shell pipelines, callers must use run_shell_cmd() instead.
+    """
     try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+        cmd_list = shlex.split(cmd) if isinstance(cmd, str) else cmd
+        result = subprocess.run(cmd_list, shell=False, capture_output=True, text=True, timeout=timeout)
+        return result.returncode == 0, result.stdout.strip()
+    except Exception as e:
+        return False, str(e)
+
+
+def run_shell_cmd(cmd: str, timeout=30):
+    """Run a shell pipeline command and return (success, stdout).
+
+    Only use when pipes or shell redirection are strictly required.
+    All user-supplied values must be sanitised with shlex.quote() by the caller.
+    """
+    try:
+        result = subprocess.run(  # nosec B602 – shell required for pipeline/redirect
+            cmd, shell=True, capture_output=True, text=True, timeout=timeout
+        )
         return result.returncode == 0, result.stdout.strip()
     except Exception as e:
         return False, str(e)
@@ -52,7 +74,7 @@ def detect_technologies(domain, recon_dir=None):
     # Method 2: Direct httpx probe
     if not techs:
         quoted_domain = shlex.quote(domain)
-        success, output = run_cmd(
+        success, output = run_shell_cmd(  # nosec B602 – shell pipe required
             f'echo {quoted_domain} | httpx -silent -tech-detect -status-code 2>/dev/null',
             timeout=30
         )
@@ -66,7 +88,7 @@ def detect_technologies(domain, recon_dir=None):
 
     # Method 3: Manual header analysis
     success, output = run_cmd(
-        f'curl -sI {shlex.quote("https://" + domain)} --max-time 10 2>/dev/null',
+        ["curl", "-sI", f"https://{domain}", "--max-time", "10"],
         timeout=15
     )
     if success and output:
@@ -119,7 +141,8 @@ def detect_technologies(domain, recon_dir=None):
 
     for path, tech in fingerprints.items():
         success, output = run_cmd(
-            f'curl -s -o /dev/null -w "%{{http_code}}" {shlex.quote("https://" + domain + path)} --max-time 5',
+            ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+             f"https://{domain}{path}", "--max-time", "5"],
             timeout=10
         )
         if success and output in ("200", "301", "302", "403"):
@@ -139,14 +162,24 @@ def search_cves(tech_name, max_results=10):
     """Search for CVEs related to a technology using public APIs."""
     cves = []
 
+    # Validate and clamp max_results to a safe range.
+    try:
+        max_results = max(1, min(50, int(max_results)))
+    except (ValueError, TypeError):
+        max_results = 10
+
     # Clean up tech name for search
     search_term = re.sub(r'[/.]', ' ', tech_name).strip()
 
     # Method 1: NVD API (NIST)
     print(f"    [>] Searching CVEs for: {tech_name}...")
     try:
+        nvd_url = (
+            f"https://services.nvd.nist.gov/rest/json/cves/2.0"
+            f"?keywordSearch={_urlparse.quote(search_term)}&resultsPerPage={int(max_results)}"
+        )
         success, output = run_cmd(
-            f'curl -s "https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={search_term}&resultsPerPage={max_results}" --max-time 15',
+            ["curl", "-s", nvd_url, "--max-time", "15"],
             timeout=20
         )
         if success and output:
@@ -187,8 +220,9 @@ def search_cves(tech_name, max_results=10):
     # Method 2: cve.circl.lu API (fallback)
     if not cves:
         try:
+            circl_url = f"https://cve.circl.lu/api/search/{_urlparse.quote(search_term)}"
             success, output = run_cmd(
-                f'curl -s "https://cve.circl.lu/api/search/{search_term}" --max-time 15',
+                ["curl", "-s", circl_url, "--max-time", "15"],
                 timeout=20
             )
             if success and output:
@@ -227,7 +261,7 @@ def run_nuclei_cve_scan(domain, recon_dir=None):
     else:
         cmd = f'echo {shlex.quote("https://" + domain)} | nuclei -tags cve -severity medium,high,critical -silent -rate-limit 30 2>/dev/null'
 
-    success, output = run_cmd(cmd, timeout=300)
+    success, output = run_shell_cmd(cmd, timeout=300)  # nosec B602 – shell pipe required
 
     findings = []
     if success and output:
@@ -263,9 +297,8 @@ def check_exposed_configs(domain, recon_dir=None):
     for host in hosts:
         for path in config_paths:
             url = f"{host}{path}"
-            # Fetch response body and status code directly (no temp file needed)
             success, body = run_cmd(
-                f'curl -s -w "\\n%{{http_code}}" --max-time 5 {shlex.quote(url)}',
+                ["curl", "-s", "-w", "\n%{http_code}", "--max-time", "5", url],
                 timeout=10
             )
             if success and body:

@@ -24,10 +24,9 @@ import os
 import re
 import subprocess
 import sys
-import time
 import hashlib
 from datetime import datetime
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+from urllib.parse import urlparse
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FINDINGS_DIR = os.path.join(BASE_DIR, "findings")
@@ -77,7 +76,7 @@ def curl_request(url, method="GET", headers=None, data=None, timeout=10):
 
 def get_response_signature(status, body):
     """Create a signature for response comparison."""
-    body_hash = hashlib.md5(body.encode()[:1000]).hexdigest()[:8] if body else "empty"
+    body_hash = hashlib.md5(body.encode()[:1000], usedforsecurity=False).hexdigest()[:8] if body else "empty"  # nosec B324
     body_len = len(body) if body else 0
     return f"{status}:{body_len}:{body_hash}"
 

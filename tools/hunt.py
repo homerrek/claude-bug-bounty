@@ -24,6 +24,7 @@ import argparse
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -56,9 +57,34 @@ def log(level, msg):
 
 
 def run_cmd(cmd, cwd=None, timeout=600):
-    """Run a shell command and return (success, output)."""
+    """Run a shell command string and return (success, output).
+
+    Uses shlex.split() to convert the command string to a list, avoiding
+    shell=True. For commands that genuinely require shell features (pipes,
+    redirects), callers should use subprocess directly with a validated list.
+    """
     try:
+        cmd_list = shlex.split(cmd) if isinstance(cmd, str) else cmd
         result = subprocess.run(
+            cmd_list, shell=False, capture_output=True, text=True,
+            cwd=cwd, timeout=timeout
+        )
+        return result.returncode == 0, result.stdout + result.stderr
+    except subprocess.TimeoutExpired:
+        return False, "Command timed out"
+    except Exception as e:
+        return False, str(e)
+
+
+def run_shell_cmd(cmd: str, cwd=None, timeout=600):
+    """Run a shell pipeline command and return (success, output).
+
+    Only use this for commands that strictly require shell features such as
+    pipes or redirects. The caller is responsible for sanitising all
+    user-supplied values with shlex.quote() before interpolation.
+    """
+    try:
+        result = subprocess.run(  # nosec B602 – shell required for pipeline
             cmd, shell=True, capture_output=True, text=True,
             cwd=cwd, timeout=timeout
         )
@@ -76,8 +102,7 @@ def check_tools():
     missing = []
 
     for tool in tools:
-        success, _ = run_cmd(f"command -v {tool}")
-        if success:
+        if shutil.which(tool):
             installed.append(tool)
         else:
             missing.append(tool)
@@ -103,7 +128,7 @@ def setup_wordlists():
             continue
 
         log("info", f"Downloading {name}...")
-        success, output = run_cmd(f'curl -sL "{url}" -o "{filepath}"')
+        success, output = run_cmd(["curl", "-sL", url, "-o", filepath])
         if success and os.path.getsize(filepath) > 100:
             lines = sum(1 for _ in open(filepath))
             log("ok", f"Downloaded {name} ({lines} entries)")
@@ -118,7 +143,7 @@ def select_targets(top_n=10):
     log("info", "Running target selector...")
     script = os.path.join(TOOLS_DIR, "target_selector.py")
     success, output = run_cmd(
-        f'python3 "{script}" --top {top_n}',
+        [sys.executable, script, "--top", str(top_n)],
         timeout=60
     )
     print(output)
@@ -239,8 +264,9 @@ def _run_scanner(scanner_file: str, args_str: str, domain: str, category: str,
     out_dir = os.path.join(FINDINGS_DIR, domain, category)
     os.makedirs(out_dir, exist_ok=True)
     out_file = os.path.join(out_dir, f"{scanner_file.replace('.py', '')}_results.json")
-    cmd = f'python3 {shlex.quote(scanner_path)} {args_str} > {shlex.quote(out_file)} 2>&1'
-    ok, _ = run_cmd(cmd, timeout=timeout)
+    # Use shell for output redirection; all paths and args are sanitised with shlex.quote.
+    cmd = f'{shlex.quote(sys.executable)} {shlex.quote(scanner_path)} {args_str} > {shlex.quote(out_file)} 2>&1'
+    ok, _ = run_shell_cmd(cmd, timeout=timeout)  # nosec B602 – shell required for redirection
     return ok
 
 
@@ -269,8 +295,8 @@ def run_param_discovery(domain: str) -> bool:
     if not os.path.isfile(hosts_file):
         return False
     out_file = os.path.join(out_dir, "params_discovered.txt")
-    cmd = f'cat "{hosts_file}" | python3 -m arjun --stdin -oJ "{out_file}" 2>&1 || true'
-    ok, _ = run_cmd(cmd, timeout=600)
+    cmd = f'cat {shlex.quote(hosts_file)} | {shlex.quote(sys.executable)} -m arjun --stdin -oJ {shlex.quote(out_file)} 2>&1 || true'
+    ok, _ = run_shell_cmd(cmd, timeout=600)  # nosec B602 – shell pipe required
     return ok
 
 
@@ -302,8 +328,8 @@ def run_cms_exploit(domain: str) -> bool:
     os.makedirs(out_dir, exist_ok=True)
     out_file = os.path.join(out_dir, "cms_results.txt")
     script = os.path.join(TOOLS_DIR, "vuln_scanner.sh")
-    cmd = f'bash "{script}" --cms-only "{recon_dir_path}" 2>&1 || true'
-    ok, output = run_cmd(cmd, timeout=300)
+    cmd = f'bash {shlex.quote(script)} --cms-only {shlex.quote(recon_dir_path)} 2>&1 || true'
+    ok, output = run_shell_cmd(cmd, timeout=300)  # nosec B602 – shell pipe required
     Path(out_file).write_text(output)
     return ok
 
@@ -328,9 +354,18 @@ def run_sqlmap_request_file(request_file: str, domain: str = "",
     out_dir = os.path.join(FINDINGS_DIR, domain or "unknown", "sqlmap")
     os.makedirs(out_dir, exist_ok=True)
     out_file = os.path.join(out_dir, "sqlmap_results.txt")
-    cmd = (f'sqlmap -r "{request_file}" --level={level} --risk={risk} '
-           f'--batch --output-dir="{out_dir}" 2>&1 | tee "{out_file}"')
-    ok, _ = run_cmd(cmd, timeout=1200)
+    # Clamp level/risk to their valid sqlmap ranges (1-5 and 1-3 respectively).
+    try:
+        safe_level = max(1, min(5, int(level)))
+    except (ValueError, TypeError):
+        safe_level = 5
+    try:
+        safe_risk = max(1, min(3, int(risk)))
+    except (ValueError, TypeError):
+        safe_risk = 3
+    cmd = (f'sqlmap -r {shlex.quote(request_file)} --level={safe_level} --risk={safe_risk} '
+           f'--batch --output-dir={shlex.quote(out_dir)} 2>&1 | tee {shlex.quote(out_file)}')
+    ok, _ = run_shell_cmd(cmd, timeout=1200)  # nosec B602 – shell pipe (tee) required
     return ok
 
 
@@ -389,7 +424,7 @@ def generate_reports(domain):
 
     log("info", f"Generating reports for {domain}...")
     script = os.path.join(TOOLS_DIR, "report_generator.py")
-    success, output = run_cmd(f'python3 "{script}" "{findings_dir}"')
+    success, output = run_cmd([sys.executable, script, findings_dir])
     print(output)
 
     # Count generated reports
@@ -595,10 +630,10 @@ def run_exotic_scan(domain, profile="core", quick=False):
 
         scanner_name = scanner_file.replace(".py", "")
         out_file = os.path.join(findings_dir, f"{scanner_name}.json")
-        cmd = f'python3 "{scanner_path}" {scanner_args} > "{out_file}" 2>&1'
+        cmd = f'{shlex.quote(sys.executable)} {shlex.quote(scanner_path)} {scanner_args} > {shlex.quote(out_file)} 2>&1'
 
         log("info", f"  [{scanner_name}]...")
-        success, _ = run_cmd(cmd, timeout=120 if quick else 300)
+        success, _ = run_shell_cmd(cmd, timeout=120 if quick else 300)  # nosec B602 – shell redirect
         if success:
             ran += 1
         else:

@@ -174,7 +174,6 @@ def test_jku_x5u(url: str, header: dict, payload: dict, rate: float, dry_run: bo
 def test_expired_token(url: str, header: dict, payload: dict, original_token: str,
                         rate: float, dry_run: bool):
     print(f"\n{BOLD}[5] Expired Token Acceptance{RESET}")
-    import calendar
     modified = {**payload, "exp": 1000000000}  # epoch 2001 — definitely expired
     forged = forge_token(header, modified, "originalsig")
     if dry_run:
