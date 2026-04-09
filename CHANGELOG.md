@@ -1,5 +1,17 @@
 # Changelog
 
+## v4.2.1 — Bug Fixes + Documentation (Apr 2026)
+
+### Fixed
+
+- **`tools/__init__.py`**: Added package marker so `from tools.credential_store import CredentialStore` and `from tools.recon_adapter import ReconAdapter` resolve correctly in the test suite. Previously `test_credential_store.py` and `test_recon_adapter.py` raised `ModuleNotFoundError` at collection time, hiding 46 tests. All **222 tests** now pass.
+
+### Documentation
+
+- **`TODOS.md`**: Marked TODO-4 (BASE_DIR path resolution) as ✅ RESOLVED — the bug was implicitly fixed when `hunt.py` was relocated from the repo root into `tools/` during v4.0.0. Added TODO-8 entry documenting the `tools/__init__.py` fix.
+
+---
+
 ## v4.2.0 — New Scanners + Token Optimization + Integrity Testing (Apr 2026)
 
 ### Added — 3 New Vulnerability Scanners

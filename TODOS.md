@@ -36,13 +36,9 @@ Items deferred from the MCP-First Bionic Hunter design review (2026-03-24).
 
 ---
 
-## ~~TODO-4: Fix hunt.py BASE_DIR path resolution~~ ⚠️ DEFERRED
+## ~~TODO-4: Fix hunt.py BASE_DIR path resolution~~ ✅ RESOLVED (2026-04-09)
 
-**What:** `hunt.py` line 1 uses `BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))` which goes 2 levels up. But `hunt.py` is at repo root, so `BASE_DIR` points to the parent of the repo — all derived paths (TOOLS_DIR, RECON_DIR, FINDINGS_DIR) resolve to wrong locations.
-
-**Why:** This is a latent bug — any code path that uses these directories will fail silently or write to unexpected locations.
-
-**Resolution:** Deferred to future release — low priority as no active issues reported.
+**Resolution:** `hunt.py` was moved from the repo root into `tools/` as part of the v4.0.0 restructure. `BASE_DIR = os.path.dirname(os.path.abspath(__file__))` now correctly resolves to the `tools/` directory, making `TOOLS_DIR = BASE_DIR` accurate. Output paths (`RECON_DIR`, `FINDINGS_DIR`) use the `BBH_OUTPUT_DIR` env var (defaulting to `~/bug-bounty-outputs`), completely decoupled from repo layout.
 
 **Source:** Outside voice (eng review, 2026-03-24)
 
@@ -139,3 +135,15 @@ Items deferred from the MCP-First Bionic Hunter design review (2026-03-24).
 ---
 
 ## Active TODOs (None)
+
+---
+
+## ~~TODO-8: Fix test collection errors for test_credential_store + test_recon_adapter~~ ✅ RESOLVED (2026-04-09)
+
+**Resolution:** Added `tools/__init__.py` to make the `tools/` directory a proper Python package. Both test files import via `from tools.credential_store import CredentialStore` / `from tools.recon_adapter import ReconAdapter`, which requires the package marker. The `memory/` directory already had `memory/__init__.py` for the same reason. All 222 tests now pass (previously 220 collected with 2 collection errors).
+
+**What:** `tests/test_credential_store.py` and `tests/test_recon_adapter.py` raised `ModuleNotFoundError: No module named 'tools.credential_store'` during test collection. pytest could not even discover the 31 + 15 = 46 tests in those files.
+
+**Why:** `tools/` lacked an `__init__.py`, so Python couldn't treat it as a package, breaking `from tools.X import Y` style imports while `from memory.X import Y` (which has `__init__.py`) worked fine.
+
+**Source:** Verification run (2026-04-09)
