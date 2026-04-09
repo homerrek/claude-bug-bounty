@@ -7,13 +7,14 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
 
-# Patch the tools.token_optimizer import used inside context_manager
-import token_optimizer
-import types
-tools_pkg = types.ModuleType("tools")
-tools_pkg.token_optimizer = token_optimizer
-sys.modules.setdefault("tools", tools_pkg)
+# Make tools.token_optimizer importable for context_manager's lazy import.
+# Use the real tools package (tools/__init__.py exists) so sys.modules["tools"]
+# stays a proper package and doesn't break other test files.
+import token_optimizer  # direct import; tools/ is in sys.path via conftest
+import tools             # real package import; repo root is in sys.path via conftest
 sys.modules.setdefault("tools.token_optimizer", token_optimizer)
+if not hasattr(tools, "token_optimizer"):
+    tools.token_optimizer = token_optimizer
 
 from context_manager import ContextManager, AVAILABLE_CONTEXT
 
