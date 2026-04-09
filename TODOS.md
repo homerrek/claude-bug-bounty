@@ -40,10 +40,6 @@ Items deferred from the MCP-First Bionic Hunter design review (2026-03-24).
 
 **Resolution:** `hunt.py` was moved from the repo root into `tools/` as part of the v4.0.0 restructure. `BASE_DIR = os.path.dirname(os.path.abspath(__file__))` now correctly resolves to the `tools/` directory, making `TOOLS_DIR = BASE_DIR` accurate. Output paths (`RECON_DIR`, `FINDINGS_DIR`) use the `BBH_OUTPUT_DIR` env var (defaulting to `~/bug-bounty-outputs`), completely decoupled from repo layout.
 
-**What:** `hunt.py` line 1 uses `BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))` which goes 2 levels up. But `hunt.py` is at repo root, so `BASE_DIR` points to the parent of the repo — all derived paths (TOOLS_DIR, RECON_DIR, FINDINGS_DIR) resolve to wrong locations.
-
-**Why:** This is a latent bug — any code path that uses these directories will fail silently or write to unexpected locations.
-
 **Source:** Outside voice (eng review, 2026-03-24)
 
 ---
