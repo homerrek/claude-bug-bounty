@@ -29,6 +29,7 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TOOLS_DIR = BASE_DIR
@@ -555,6 +556,27 @@ def run_ai_llm_scan(domain: str) -> bool:
     return ok or probe_ok
 
 
+_GITHUB_HOSTS = {"github.com", "www.github.com"}
+_MAX_CICD_REPOS = 5  # maximum GitHub repos to scan per target
+
+
+def _is_github_url(raw: str) -> bool:
+    """Return True only when the URL host is exactly github.com (or www.github.com)."""
+    raw = raw.strip()
+    if not raw:
+        return False
+    # Prepend scheme so urlparse can extract the netloc correctly.
+    if not raw.startswith(("http://", "https://")):
+        raw = "https://" + raw
+    try:
+        host = urlparse(raw).netloc.lower()
+        # Strip port if present.
+        host = host.split(":")[0]
+        return host in _GITHUB_HOSTS
+    except Exception:
+        return False
+
+
 def run_cicd_scan(domain: str) -> bool:
     """Run CI/CD scanner when GitHub repository URLs are found in recon output (hunt step)."""
     urls_file = os.path.join(RECON_DIR, domain, "urls", "all.txt")
@@ -567,10 +589,7 @@ def run_cicd_scan(domain: str) -> bool:
     except OSError:
         return False
 
-    github_urls = [
-        line.strip() for line in lines
-        if "github.com" in line.lower() and line.strip()
-    ]
+    github_urls = [line.strip() for line in lines if _is_github_url(line)]
     if not github_urls:
         return False
 
@@ -584,7 +603,7 @@ def run_cicd_scan(domain: str) -> bool:
     os.makedirs(cicd_dir, exist_ok=True)
 
     ran = 0
-    for raw_url in github_urls[:5]:  # limit to first 5 discovered repos
+    for raw_url in github_urls[:_MAX_CICD_REPOS]:
         # Normalize to owner/repo (strip protocol and trailing slashes/paths)
         normalized = raw_url
         for prefix in ("https://github.com/", "http://github.com/", "github.com/"):
