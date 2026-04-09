@@ -18,14 +18,14 @@ import urllib.parse
 import urllib.error
 from datetime import datetime
 
-# macOS: Python may not have system SSL certs. Use unverified context for API queries.
+# Prefer certifi CA bundle when available; fall back to the system default
+# SSL context (which already trusts OS-level CAs). Never disable verification.
 _SSL_CTX = ssl.create_default_context()
 try:
     import certifi
     _SSL_CTX = ssl.create_default_context(cafile=certifi.where())
 except ImportError:
-    _SSL_CTX.check_hostname = False
-    _SSL_CTX.verify_mode = ssl.CERT_NONE
+    pass  # ssl.create_default_context() already loads system CA store
 
 # ─── Color codes ──────────────────────────────────────────────────────────────
 RED    = "\033[91m"

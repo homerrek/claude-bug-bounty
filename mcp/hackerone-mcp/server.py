@@ -27,15 +27,15 @@ import urllib.error
 import urllib.parse
 from datetime import datetime, timezone
 
-
 # ─── SSL context ─────────────────────────────────────────────────────────────
+# Prefer certifi CA bundle when available; fall back to the system default
+# SSL context (which already trusts OS-level CAs). Never disable verification.
 _SSL_CTX = ssl.create_default_context()
 try:
     import certifi
     _SSL_CTX = ssl.create_default_context(cafile=certifi.where())
 except ImportError:
-    _SSL_CTX.check_hostname = False
-    _SSL_CTX.verify_mode = ssl.CERT_NONE
+    pass  # ssl.create_default_context() already loads system CA store
 
 H1_GRAPHQL = "https://hackerone.com/graphql"
 DEFAULT_TIMEOUT = 15

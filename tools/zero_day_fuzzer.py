@@ -77,7 +77,7 @@ def curl_request(url, method="GET", headers=None, data=None, timeout=10):
 
 def get_response_signature(status, body):
     """Create a signature for response comparison."""
-    body_hash = hashlib.md5(body.encode()[:1000]).hexdigest()[:8] if body else "empty"
+    body_hash = hashlib.md5(body.encode()[:1000], usedforsecurity=False).hexdigest()[:8] if body else "empty"  # nosec B324
     body_len = len(body) if body else 0
     return f"{status}:{body_len}:{body_hash}"
 
