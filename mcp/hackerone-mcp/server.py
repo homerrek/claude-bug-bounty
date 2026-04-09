@@ -49,7 +49,8 @@ class HackerOneAPIError(Exception):
 
 
 def _graphql_request(query: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
-    """Execute a GraphQL request against HackerOne's public API."""
+    """Execute a GraphQL request against HackerOne's public API with 429 backoff."""
+    import time as _time
     payload = json.dumps({"query": query}).encode("utf-8")
     req = urllib.request.Request(
         H1_GRAPHQL,
@@ -59,25 +60,32 @@ def _graphql_request(query: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
             "User-Agent": "claude-bug-bounty/2.1",
         },
     )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CTX) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-            data = json.loads(body)
-            if "errors" in data:
-                raise HackerOneAPIError(
-                    f"GraphQL errors: {data['errors']}",
-                    status_code=200,
-                )
-            return data
-    except urllib.error.HTTPError as e:
-        raise HackerOneAPIError(
-            f"HTTP {e.code}: {e.reason}",
-            status_code=e.code,
-        )
-    except urllib.error.URLError as e:
-        raise HackerOneAPIError(f"Network error: {e.reason}")
-    except json.JSONDecodeError as e:
-        raise HackerOneAPIError(f"Invalid JSON response: {e}")
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CTX) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+                data = json.loads(body)
+                if "errors" in data:
+                    raise HackerOneAPIError(
+                        f"GraphQL errors: {data['errors']}",
+                        status_code=200,
+                    )
+                return data
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                retry_after = int(e.headers.get("Retry-After", 10) or 10)
+                wait = min(retry_after, 60) * (attempt + 1)
+                _time.sleep(wait)
+                continue
+            raise HackerOneAPIError(
+                f"HTTP {e.code}: {e.reason}",
+                status_code=e.code,
+            )
+        except urllib.error.URLError as e:
+            raise HackerOneAPIError(f"Network error: {e.reason}")
+        except json.JSONDecodeError as e:
+            raise HackerOneAPIError(f"Invalid JSON response: {e}")
+    raise HackerOneAPIError("Max retries exceeded (rate limited)", status_code=429)
 
 
 # ─── Tool: search_disclosed_reports ──────────────────────────────────────────

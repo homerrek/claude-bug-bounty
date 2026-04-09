@@ -105,18 +105,27 @@ TECH_H1_KEYWORDS = {
 
 
 def fetch_url(url: str, headers: dict = None, data: bytes = None, timeout: int = 10) -> dict | None:
-    """Simple HTTP fetch, returns parsed JSON or None on error."""
+    """Simple HTTP fetch with 429 backoff; returns parsed JSON or None on error."""
+    import time as _time
     req = urllib.request.Request(url, data=data, headers=headers or {})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CTX) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-            return json.loads(body)
-    except urllib.error.HTTPError as e:
-        print(f"  {YELLOW}HTTP {e.code} for {url}{RESET}")
-        return None
-    except Exception as e:
-        print(f"  {YELLOW}Error fetching {url}: {e}{RESET}")
-        return None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CTX) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+                return json.loads(body)
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                retry_after = int(e.headers.get("Retry-After", 5) or 5)
+                wait = min(retry_after, 30) * (attempt + 1)
+                print(f"  {YELLOW}Rate limited ({url}). Waiting {wait}s…{RESET}")
+                _time.sleep(wait)
+                continue
+            print(f"  {YELLOW}HTTP {e.code} for {url}{RESET}")
+            return None
+        except Exception as e:
+            print(f"  {YELLOW}Error fetching {url}: {e}{RESET}")
+            return None
+    return None
 
 
 def fetch_github_advisories(tech: str) -> list[dict]:
